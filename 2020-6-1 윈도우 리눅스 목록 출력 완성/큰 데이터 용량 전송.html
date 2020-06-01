@@ -1,0 +1,248 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+	<style>
+		div{
+			float:left;
+		}
+	</style>
+	<script>
+		var ws=0;
+		var ws_text=0;
+		var ip="";
+		var port="";
+		var dirList = new Array();
+		var fileList = new Array();
+		function ws_connect(){
+			//text_port 는 입력된 port보다 1이 크다
+			ip = document.getElementById('ipArea').value;
+			port = document.getElementById('portArea').value;
+			text_port = port*1;
+			text_port += 1;
+			text_port+="";
+			ws_text = new WebSocket("ws://"+ip+":"+text_port);
+		
+			//text용 웹소켓이 접속되면 접속되는 함수
+			ws_text.onopen = function(message){
+				alert('connected');
+			};
+
+			//text용 웹소켓이 끝나면 호출되는 함수
+			ws_text.onclose=function(message){
+				alert('disconnected');
+				
+			};
+
+			//text용 웹소켓이 통신중 에러가 발생되면 호출되는 함수
+			ws_text.onerror = function(message){
+				alert('error occured...');
+				
+			};
+
+			//text용 웹소켓 서버로부터 메시지가 오면 호출되는 함수
+			ws_text.onmessage = function(message){
+				
+				
+				//서버로 부터의 JSON 데이터를 parsing해서 저장
+				// ex) {"kinds": "directory", "list": ["All Users", "Default", "Default User", "Public", "rudwn"]}
+				
+				var parsed_data = JSON.parse(message.data);
+				
+				//JSON 데이터의 kinds가 디렉토리이면
+				if(parsed_data.kinds==="directory"){
+					make_div(parsed_data.list, "directory");
+				}
+				else if(parsed_data.kinds==="filelist"){
+					make_div(parsed_data.list, "file");
+				}
+			};
+
+			//text용 웹소켓 서버로 메시지를 전송하는 함수
+			/* send를 하면 146번째의 send Message가 실행되어서 주석처리
+			function sendMessage(event){
+				var message = document.getElementById("textMessage").value;
+				alert(60);
+				//message 전송
+				ws_text.send(message);
+	
+				// textMessage객체의 값을 초기화
+				document.getElementById("textMessage").value = "";
+			};
+			*/
+			function disconnect(){
+				ws_text.close();
+			}
+		}
+
+		function upload(){
+			var file = document.getElementById('file').files[0];// 파일을 받아옴
+			var buffersize=102400;// 파일을 전송할 단위인 버퍼사이즈 설정(1024:1byte)
+			filename = file.name;// 파일의 이름
+			filesize = file.size;// 파일의 크기
+			var reader = new FileReader();
+			reader.readAsArrayBuffer(file);// file을 ArrayBuffer로 읽어옴
+			var rawData = new ArrayBuffer();// 버퍼사이즈 만큼 데이터를 저장할 rawData 설정
+
+			// 파일을 읽으면 요청되는 이벤트
+			reader.onload = function(e){
+				console.log(e.target.result);
+				rawData = e.target.result;
+			}
+
+			var pos=0;//파일의 시작위치
+
+			//웹소켓 생성(ip주소 및 포트 설정)
+			//파일 보내는 전용
+			//var ws = new WebSocket("ws://192.168.252.1:8080");
+			console.log("ws://"+ip+":"+port);
+			var ws = new WebSocket("ws://"+ip+":"+port);
+
+			//웹소켓에 접속이 되면, START를 전송
+			ws.onopen = function(){
+				ws.send("START");
+			};
+
+			// START -> FILENAME -> FILESIZE -> DATA -> DATA -> ...
+			ws.onmessage = function(message){
+				// 메시지 echo
+				console.log(message.data);
+				ws.send(message.data);
+
+				if(message.data === 'FILENAME'){
+					//파일 이름 전송
+					ws.send(filename);
+				}else if(message.data === 'FILESIZE'){
+					//파일 사이즈 전송
+					ws.send(filesize);
+				}else if(message.data ==='DATA'){
+					//buffersize만큼 파일을 나누어 전송
+					ws.send(file.slice(pos, pos+buffersize));
+					pos = pos + buffersize;
+					if(pos > filesize){
+						pos = filesize;
+					}
+				}
+			}
+
+			ws.onclose=function(){
+				console.log("disconnected");
+			}
+		};
+
+
+		//text용 웹소켓 생성
+		//var ws_text = new WebSocket("ws://192.168.252.1:8081");
+
+		//text용 웹소켓이 끝나면 호출되는 함수
+		ws_text.onclose=function(message){
+			alert('disconnected');
+		};
+
+		//text용 웹소켓이 통신중 에러가 발생되면 호출되는 함수
+		ws_text.onerror = function(message){
+			alert('error occured...');
+		};
+
+
+		//text용 웹소켓 서버로 메시지를 전송하는 함수
+		//kind가 'chdir'이면, 위치를 변경한다는 뜻(kind:chdir, message:이동할 파일 이름)
+		function sendMessage(kind, message){
+			var msg ={
+				kinds : kind,
+				text : message
+			};
+
+			json_msg = JSON.stringify(msg);
+			
+			//message 전송
+			ws_text.send(json_msg);
+		};
+
+		function disconnect(){
+			ws_text.close();
+		}
+
+		//파일과 딕렉토리 div를 동적 생성
+		//list에는 파일 배열 또는 디렉토리 배열
+		//kinds에는 file 또는 directory
+		//kinds가 file이면 그림은 file.png 이고, directory이면 그림이 direcrory.png
+		function make_div(list, kinds){
+			for(var i=0; i<list.length; i++){
+				var img = document.createElement('img');
+				if(kinds==="directory"){
+					img.src = 'directory2.png';
+				}
+				else if(kinds==="file"){
+					img.src = 'file2.png';
+				}
+				
+				var par = document.getElementById("list");
+				var newDiv = document.createElement("div");
+
+				var childDiv = document.createElement("div");
+		
+				childDiv.style.fontSize = "20px";
+				childDiv.style.width = "240px";
+				childDiv.style.overflow = "hidden";
+				childDiv.innerHTML = list[i].substr(0, 20);
+				
+				newDiv.appendChild(img);
+				
+				newDiv.appendChild(childDiv);
+				newDiv.id = list[i]+"";
+				//newDiv.style.backgroundColor = "yellow";
+				newDiv.style.height = "250px";
+				newDiv.style.width = "250px";
+				/*
+				newDiv.onclick= function(){
+					var p = this.parentElement;
+					alert(this.id);
+					sendMessage("chdir", this.id);
+					p.removeChild(this);
+				};
+				*/
+				newDiv.onclick= function(){
+					//var p = this.parentElement;
+					//alert(this.id);
+					sendMessage("chdir", this.id);
+					//p.removeChild(this);
+
+					//파일, 디렉토리가 나타나는 div id 가 list인데,
+					//이 list의 Child(파일, 디렉토리)를 모두 제거
+					//하는 반복문
+					var p = document.getElementById('list');
+					while(p.firstChild){
+						p.removeChild(p.firstChild);
+					}
+				};
+				par.appendChild(newDiv);
+			}
+		}
+	</script>
+</head>
+<body>
+	<!--안내 text 박스. 나중에 이걸로 해야함
+	<input id="ipArea" type="text" placeholder="ip address"></input>
+	<input id="portArea" type="text" placeholder="port number"></input>
+	-->
+	<input id="ipArea" type="text" value="192.168.252.15"></input>
+	<input id="portArea" type="text" value="8080"></input>
+	<button id="connect_btn" onclick="ws_connect()">Connect</button>
+	<br/>
+	<input id="file" type="file">
+	<button id="uploadbtn" onclick="upload()">파일 업로드</button>
+	<br/>
+	<form>
+		<!-- 접속 종료 버튼 -->
+		<input onclick="disconnect()" value="Disconnect" type="button">
+	</form>
+
+	
+	<!-- 파일 div들이 생성될 list div -->
+	<div id="list" style="background-color: ivory">
+
+	</div>
+</body>
+</html>
