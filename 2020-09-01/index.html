@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8"/>
+    <title></title>
+   <style>
+      div{
+         float:left;
+      }
+      .contextmenu {
+         display: none;
+         position: absolute;
+         width: 200px;
+         margin: 0;
+         padding: 0;
+         background: #FFFFFF;
+         border-radius: 5px;
+         list-style: none;
+         box-shadow:
+            0 15px 35px rgba(50,50,90,0.1),
+            0 5px 15px rgba(0,0,0,0.07);
+         overflow: hidden;
+         z-index: 999999;
+         }
+
+      .contextmenu li {
+         border-left: 3px solid transparent;
+         transition: ease .2s;
+         }
+
+      .contextmenu li a {
+         display: block;
+         padding: 10px;
+         color: #B0BEC5;
+         text-decoration: none;
+         transition: ease .2s;
+         }
+
+      .contextmenu li:hover {
+         background: #CE93D8;
+         border-left: 3px solid #9C27B0;
+      }
+
+      .contextmenu li:hover a {
+         color: #FFFFFF;
+      }
+
+      div:hover{
+         background: #CE93D8;
+      }
+   </style>
+   <script src ="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+   <script>
+      const localParent='';
+      const localChild='';
+
+      var targetId="";
+      <!-- 클릭시 드롭다운 메뉴 출력 -->
+      $(document).ready(function(){
+        //Show contextmenu:
+        $(document).contextmenu(function(e){
+         //Get window size:
+         var winWidth = $(document).width();
+         var winHeight = $(document).height();
+         //Get pointer position:
+         var posX = e.pageX;
+         var posY = e.pageY;
+         //Get contextmenu size:
+         var menuWidth = $(".contextmenu").width();
+         var menuHeight = $(".contextmenu").height();
+         //Security margin:
+         var secMargin = 10;
+         //Prevent page overflow:
+         if(posX + menuWidth + secMargin >= winWidth
+         && posY + menuHeight + secMargin >= winHeight){
+           //Case 1: right-bottom overflow:
+           posLeft = posX - menuWidth - secMargin + "px";
+           posTop = posY - menuHeight - secMargin + "px";
+         }
+         else if(posX + menuWidth + secMargin >= winWidth){
+           //Case 2: right overflow:
+           posLeft = posX - menuWidth - secMargin + "px";
+           posTop = posY + secMargin + "px";
+         }
+         else if(posY + menuHeight + secMargin >= winHeight){
+           //Case 3: bottom overflow:
+           posLeft = posX + secMargin + "px";
+           posTop = posY - menuHeight - secMargin + "px";
+         }
+         else {
+           //Case 4: default values:
+           posLeft = posX + secMargin + "px";
+           posTop = posY + secMargin + "px";
+         };
+         //Display contextmenu:
+         $(".contextmenu").css({
+           "left": posLeft,
+           "top": posTop
+         }).show();
+         //Prevent browser default contextmenu.
+         return false;
+        });
+        //Hide contextmenu:
+        $(document).click(function(){
+         $(".contextmenu").hide();
+        });
+        $("#remove").click(function(){
+         sendMessage("remove",targetId);
+         alert(targetId+" deleted");
+         var p = document.getElementById('list');
+            while(p.firstChild){
+               p.removeChild(p.firstChild);
+            }
+        });
+        $("#filecopy").click(function(){
+         sendMessage("copy",targetId);
+        });
+        $("#filepaste").click(function(){
+         sendMessage("paste","temp");
+         alert(targetId+" copied");
+         var p = document.getElementById('list');
+            while(p.firstChild){
+               p.removeChild(p.firstChild);
+            }
+        });
+        $("#namemodify").click(function(){
+         var inputString = prompt("바꿀 이름을 입력하세요");
+         sendMessageChangeName("namemodify",targetId,inputString);
+         var p = document.getElementById('list');
+            while(p.firstChild){
+               p.removeChild(p.firstChild);
+            }
+        });
+
+        //우클릭 메뉴에서 MakeTextFile 클릭
+        $("#maketextfile").click(function(){
+         //textArea 보이게 하기
+         textAreaOpen("");
+
+         // makefilenamearea 창 보이게 하기
+         var makefilenamearea = document.getElementById("makefilenamearea");
+         makefilenamearea.style.display='';
+
+         //Make 버튼 보이게하기
+         var makebtn = document.getElementById("makebtn");
+         makebtn.style.display='';
+
+         //cancel 버튼 보이게 하기
+         document.getElementById("cancel").style.display='';
+         //sendMessage("maketextfile", targetId);
+         var p = document.getElementById('list');
+            while(p.firstChild){
+               p.removeChild(p.firstChild);
+            }
+        });
+        $("#makedir").click(function(){
+         var makedirnamearea = document.getElementById("makedirname");
+         makedirnamearea.style.display='';
+
+         var makebtn = document.getElementById("makebtndir");
+         makebtn.style.display='';
+
+         document.getElementById("canceldir").style.display='';
+         var p = document.getElementById('list');
+            while(p.firstChild){
+               p.removeChild(p.firstChild);
+            }
+        });
+      });
+      function textAreaOpen(fileText){
+         var background = document.getElementById("ta");
+         background.style.display='';
+         background.value=fileText;
+      }
+      var ws=0;
+      var ws_text=0;
+      var ip="";
+      var port="";
+      var dirList = new Array();
+      var fileList = new Array();
+
+      function ws_connect(){
+         document.getElementById("connect_btn").style.display='none';
+         document.getElementById("ipArea").style.display='none';
+         document.getElementById("portArea").style.display='none';
+         //text_port 는 입력된 port보다 1이 크다
+         var p = document.getElementById('list');
+            while(p.firstChild){
+               p.removeChild(p.firstChild);
+            }
+         ip = document.getElementById('ipArea').value;
+         port = document.getElementById('portArea').value;
+         text_port = port*1;
+         text_port += 1;
+         text_port+="";
+         ws_text = new WebSocket("ws://"+ip+":"+text_port);
+
+         //text용 웹소켓이 접속되면 접속되는 함수
+         ws_text.onopen = function(message){
+            alert('connected');
+            var pwd=prompt("비밀번호를 입력하세요 : ");
+            sendMessage("password", pwd);
+         };
+
+         //text용 웹소켓이 끝나면 호출되는 함수
+         ws_text.onclose=function(message){
+            alert('disconnected');
+
+         };
+
+         //text용 웹소켓이 통신중 에러가 발생되면 호출되는 함수
+         ws_text.onerror = function(message){
+            alert('error occured...');
+
+         };
+
+         //text용 웹소켓 서버로부터 메시지가 오면 호출되는 함수
+         ws_text.onmessage = function(message){
+
+            //서버로 부터의 JSON 데이터를 parsing해서 저장
+            // ex) {"kinds": "directory", "list": ["All Users", "Default", "Default User", "Public", "rudwn"]}
+
+            var parsed_data = JSON.parse(message.data);
+            //alert(parsed_data.kinds, parsed_data.text);
+            //JSON 데이터의 kinds가 디렉토리이면
+
+            if(parsed_data.kinds==="directory"){
+               make_div(parsed_data.list, "directory");
+            }
+            else if(parsed_data.kinds==="filelist"){
+               make_div(parsed_data.list, "file");
+            }
+            else if(parsed_data.kinds==="modify"){
+               textAreaOpen(parsed_data.text);
+            }
+            else if(parsed_data.kinds==="disconnect"){
+                disconnect();
+            }
+         };
+
+         function disconnect(){
+            ws_text.close();
+         }
+      }
+
+      function upload(){
+         var file = document.getElementById('file').files[0];// 파일을 받아옴
+         var buffersize=102400;// 파일을 전송할 단위인 버퍼사이즈 설정(1024:1byte)
+         filename = file.name;// 파일의 이름
+         filesize = file.size;// 파일의 크기
+         var reader = new FileReader();
+         reader.readAsArrayBuffer(file);// file을 ArrayBuffer로 읽어옴
+         var rawData = new ArrayBuffer();// 버퍼사이즈 만큼 데이터를 저장할 rawData 설정
+
+         // 파일을 읽으면 요청되는 이벤트
+         reader.onload = function(e){
+            console.log(e.target.result);
+            rawData = e.target.result;
+         }
+
+         var pos=0;//파일의 시작위치
+
+         //웹소켓 생성(ip주소 및 포트 설정)
+         //파일 보내는 전용
+         //var ws = new WebSocket("ws://192.168.0.82:8080");
+         console.log("ws://"+ip+":"+port);
+         var ws = new WebSocket("ws://"+ip+":"+port);
+
+         //웹소켓에 접속이 되면, START를 전송
+         ws.onopen = function(){
+            ws.send("START");
+         };
+
+         // START -> FILENAME -> FILESIZE -> DATA -> DATA -> ...
+         ws.onmessage = function(message){
+            // 메시지 echo
+            console.log(message.data);
+            ws.send(message.data);
+
+            if(message.data === 'FILENAME'){
+               //파일 이름 전송
+               ws.send(filename);
+            }else if(message.data === 'FILESIZE'){
+               //파일 사이즈 전송
+               ws.send(filesize);
+            }else if(message.data ==='DATA'){
+               //buffersize만큼 파일을 나누어 전송
+               ws.send(file.slice(pos, pos+buffersize));
+               pos = pos + buffersize;
+               if(pos > filesize){
+                  pos = filesize;
+               }
+            }
+         }
+
+         ws.onclose=function(){
+            console.log("disconnected");
+            var p = document.getElementById('list');
+            while(p.firstChild){
+                p.removeChild(p.firstChild);
+            }
+            sendMessage("cancel","temp");
+         }
+      };
+
+
+      //text용 웹소켓이 끝나면 호출되는 함수
+      ws_text.onclose=function(message){
+         alert('disconnected');
+      };
+
+      //text용 웹소켓이 통신중 에러가 발생되면 호출되는 함수
+      ws_text.onerror = function(message){
+         alert('error occured...');
+      };
+
+
+      //text용 웹소켓 서버로 메시지를 전송하는 함수
+      //kind가 'chdir'이면, 위치를 변경한다는 뜻(kind:chdir, message:이동할 파일 이름)
+      function sendMessage(kind, message){
+         var msg ={
+            kinds : kind,
+            text : message
+         };
+
+         json_msg = JSON.stringify(msg);
+
+         //message 전송
+         ws_text.send(json_msg);
+      };
+      function sendMessageChangeName(kind, src, dst){
+         var msg ={
+            kinds : kind,
+            text : src,
+            text2 : dst
+         };
+         json_msg = JSON.stringify(msg);
+         ws_text.send(json_msg);
+      }
+      function disconnect(){
+         ws_text.close();
+      }
+      function makefile(text){
+         var msg = {
+            kinds : "modify2",
+            texts : text.value
+         };
+         ws_text.send(JSON.stringify(msg));
+         text.value='';
+         ta.style.display='none';
+         alert("Modified Successfully");
+         document.getElementById("savebtn").style.display='none';
+      }
+      //파일과 딕렉토리 div를 동적 생성
+      //list에는 파일 배열 또는 디렉토리 배열
+      //kinds에는 file 또는 directory
+      //kinds가 file이면 그림은 file.png 이고, directory이면 그림이 directory.png
+      function make_div(list, kinds){
+         for(var i=0; i<list.length; i++){
+            var img = document.createElement('img');
+            if(kinds==="directory"){
+               img.src = 'directory.png';
+            }
+            else if(kinds==="file"){
+               img.src = 'file.png';
+            }
+
+            var par = document.getElementById("list");
+
+            var newDiv = document.createElement("div");
+
+            var childDiv = document.createElement("div");
+
+            childDiv.style.fontSize = "20px";
+            childDiv.style.width = "240px";
+            childDiv.style.overflow = "hidden";
+            childDiv.innerHTML = list[i].substr(0, 20);
+
+            newDiv.appendChild(img);
+
+            newDiv.appendChild(childDiv);
+            newDiv.id = list[i]+"";
+            newDiv.atr;
+            newDiv.style.height = "250px";
+            newDiv.style.width = "250px";
+            newDiv.atr=kinds;
+            newDiv.onclick= function(){
+               if(newDiv.atr=="directory"){
+                  sendMessage("chdir", this.id);
+                  //파일, 디렉토리가 나타나는 div id 가 list인데,
+                  //이 list의 Child(파일, 디렉토리)를 모두 제거
+                  //하는 반복문
+               }
+               else if(newDiv.atr==="file"){
+                  sendMessage("modify",this.id);
+                  document.getElementById("savebtn").style.display='';
+                  document.getElementById("modifycancelbtn").style.display='';
+               }
+               var p = document.getElementById('list');
+                  while(p.firstChild){
+                     p.removeChild(p.firstChild);
+                  }
+            };
+            newDiv.addEventListener("auxclick",function(){
+               targetId=this.id;
+            });
+            par.appendChild(newDiv);
+         }
+      }
+
+      function sendmakefile(){
+         if(document.getElementById("makefilenamearea").value==''){
+            alert('file name is null');
+            return;
+         }
+         alert(document.getElementById("ta").value);
+         alert(document.getElementById("makefilenamearea").value);
+         sendMessage("makename", document.getElementById("makefilenamearea").value);
+         sendMessage("maketext", document.getElementById("ta").value)
+         document.getElementById("makefilenamearea").value = "";
+         document.getElementById("makefilenamearea").style.display='none';
+         document.getElementById("makebtn").style.display='none';
+         document.getElementById("cancel").style.display='none';
+         document.getElementById("ta").value="";
+         document.getElementById("ta").style.display='none';
+         var p = document.getElementById('list');
+            while(p.firstChild){
+               p.removeChild(p.firstChild);
+            }
+      };
+
+      function makingfilecancel(){
+         document.getElementById("makefilenamearea").value = "";
+         document.getElementById("makefilenamearea").style.display='none';
+         document.getElementById("makebtn").style.display='none';
+         document.getElementById("ta").value="";
+         document.getElementById("ta").style.display='none';
+         document.getElementById("cancel").style.display='none';
+         sendMessage("cancel","temp");
+      };
+      function sendmakedir(){
+         if(document.getElementById("makedirname").value==''){
+            alert('Directory name is null');
+            return;
+         }
+         alert(document.getElementById("makedirname").value);
+         sendMessage("makedir", document.getElementById("makedirname").value);
+         document.getElementById("makedirname").value = "";
+         document.getElementById("makedirname").style.display='none';
+         document.getElementById("makebtndir").style.display='none';
+         document.getElementById("canceldir").style.display='none';
+         var p = document.getElementById('list');
+            while(p.firstChild){
+               p.removeChild(p.firstChild);
+            }
+      }
+
+      function makingdircancel(){
+         document.getElementById("makedirname").value = "";
+         document.getElementById("makedirname").style.display='none';
+         document.getElementById("makebtndir").style.display='none';
+         document.getElementById("canceldir").style.display='none';
+         sendMessage("cancel","temp");
+      }
+
+      function modifingfilecancel(){
+         document.getElementById("savebtn").style.display='none';
+         document.getElementById("modifycancelbtn").style.display='none';
+         document.getElementById("ta").value="";
+         document.getElementById("ta").style.display='none';
+         sendMessage("cancel","temp");
+      }
+   </script>
+</head>
+<body>
+   <!--안내 text 박스.-->
+   <input id="ipArea" type="text" placeholder="ip address" value="172.30.4.223"></input>
+   <input id="portArea" type="text" placeholder="port number" value="9000"></input>
+
+   <!--
+   <input id="ipArea" type="text" value="192.168.1.25"></input>
+   <input id="portArea" type="text" value="9999"></input>-->
+   <button id="connect_btn" onclick="ws_connect()">Connect</button>
+   <br/>
+   <input id="file" type="file">
+   <button id="uploadbtn" onclick="upload()">파일 업로드</button>
+   <br/>
+   <form>
+      <!-- 접속 종료 버튼 -->
+      <input onclick="disconnect()" value="Disconnect" type="button">
+
+   </form>
+
+   <textarea id="ta" rows="20" cols="30" style="display:none;" onkeydown="if(event.keyCode==9){var v=this.value,s=this.selectionStart,e=this.selectionEnd;this.value=v.substring(0, s)+'\t'+v.substring(e);this.selectionStart=this.selectionEnd=s+1;return false;}"></textarea>
+   <form>
+      <!-- 우클릭 메뉴 중 MakeTextFile을 선택하면 나타나는 파일 이름 입력하는 txt 박스-->
+      <input id="makefilenamearea" type="text" placeholder="File name" style="display:none;"></input>
+      <!-- 우클릭 메뉴 중 MakeTextFile을 선택하면 나타나는 make 버튼-->
+      <input id="makebtn" onclick="sendmakefile()" value="Make" style="display:none;" type="button"></input>
+      <input id="cancel" onclick="makingfilecancel()" value="Cancel" style="display:none;" type="button"></input>
+   </form>
+   <form>
+   <input id="makedirname" type="text" placeholder="Directory name" style="display:none;"></input>
+      <!-- 우클릭 메뉴 중 MakeTextFile을 선택하면 나타나는 make 버튼-->
+      <input id="makebtndir" onclick="sendmakedir()" value="Make" style="display:none;" type="button"></input>
+      <input id="canceldir" onclick="makingdircancel()" value="Cancel" style="display:none;" type="button"></input>
+   </form>
+   <input id="savebtn" onclick="makefile(ta)" value="Save" style="display:none;" type="button"></input>
+   <input id="modifycancelbtn" onclick="modifingfilecancel()" value="Cancel" style="display:none;" type="button"></input>
+   <!-- 우클릭 시 나오는 드롭다운 메뉴 -->
+   <ul class="contextmenu">
+      <li><a id="makedir" href="#">MakeDir</a></li>
+      <li><a id="maketextfile" href="#">MakeTextFile</a></li>
+      <li><a id="namemodify" href="#">NameModify</a></li>
+      <li><a id="remove" href="#">Remove</a></li>
+      <li><a id="filecopy" href="#">Copy</a></li>
+      <li><a id="filepaste" href="#">Paste</a></li>
+   </ul>
+   <!-- 파일 div들이 생성될 list div -->
+   <div id="list" style="background-color: ivory">
+   </div>
+</body>
+</html>
