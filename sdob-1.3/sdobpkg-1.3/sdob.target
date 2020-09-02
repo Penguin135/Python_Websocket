@@ -1,8 +1,0 @@
-[Unit]
-Description=Link sdob-server and sdob-web
-Requires=multi-user.target
-After=multi-user.target
-AllowIsolate=yes
-
-[Install]
-WantedBy=multi-user.target
