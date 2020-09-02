@@ -1,0 +1,20 @@
+yum install -y gcc wget tar make curl openssl-devel bzip2-devel libffi-devel
+wget https://www.python.org/ftp/python/3.7.0/Python-3.7.0.tgz
+tar xvfz Python-3.7.0.tgz
+cd Python-3.7.0
+./configure --enable-optimizations
+make altinstall
+cd ..
+rm -f Python-3.7.0.tgz
+rm -rf Python-3.7.0
+curl -O https://bootstrap.pypa.io/get-pip.py
+python3.7 get-pip.py
+rm -f get-pip.py
+pip install websocket websockets asyncio
+cd /opt/sdob
+cp sdob-server.service sdob-web.service sdob.target /etc/systemd/system
+systemctl daemon-reload
+systemctl enable sdob-server.service
+systemctl enable sdob-web.service
+systemctl enable sdob.target
+mkdir -p /tmp/sdob

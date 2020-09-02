@@ -1,0 +1,11 @@
+[Unit]
+Description=See Desktop On Browser Pakage
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/python3.7 /opt/sdob/server.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
